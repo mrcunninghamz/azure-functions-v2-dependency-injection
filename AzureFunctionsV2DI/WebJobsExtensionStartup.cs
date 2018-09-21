@@ -1,4 +1,6 @@
 ﻿using System;
+using Autofac;
+using Autofac.Extensions.DependencyInjection;
 using AzureFunctionsV2.DependencyInjection;
 using AzureFunctionsV2DI;
 using AzureFunctionsV2DI.Service;
@@ -14,18 +16,29 @@ namespace AzureFunctionsV2DI
     {
         public void Configure(IWebJobsBuilder builder)
         {
+            var serviceProvider = ConfigureServices(builder.Services);
+            builder.Services.AddSingleton(new InjectBindingProvider(serviceProvider));
+            builder.AddExtension<InjectConfiguration>();
+        }
+
+        public IServiceProvider ConfigureServices(IServiceCollection services)
+        {
             IConfigurationRoot config = new ConfigurationBuilder()
                 .SetBasePath(Environment.CurrentDirectory)
                 .AddJsonFile("local.settings.json", optional: true, reloadOnChange: true)
                 .AddEnvironmentVariables()
                 .Build();
-
+            
+            var containterBuilder = new ContainerBuilder();
+            containterBuilder.Populate(services);
+            
+            //Register services and modules
+            //containterBuilder.RegisterModule();
             var testValue = config.GetValue<string>("Test");
+            containterBuilder.Register(_ => new DemoService(testValue)).As<IDemoService>().InstancePerLifetimeScope();
 
-            builder.Services.AddSingleton<IDemoService>(new DemoService(testValue));
-
-            builder.Services.AddSingleton<InjectBindingProvider>();
-            builder.AddExtension<InjectConfiguration>();
+            var applicationContainer = containterBuilder.Build();
+            return new AutofacServiceProvider(applicationContainer);
         }
     }
 }
